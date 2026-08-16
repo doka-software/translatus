@@ -1,0 +1,64 @@
+name: Bug report
+description: Something broke — a crash, a mangled EPUB, a stuck translation.
+labels: [bug]
+body:
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where did it happen?
+      options:
+        - CLI (translatus)
+        - Engine / output file
+        - Subscription sidecar (apps/subscription-kit)
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead?
+      placeholder: |
+        1. Dropped in book.epub
+        2. Started a Fast translation to 繁體中文 with an OpenAI key
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: App version (Settings → General) or `translatus --version`.
+      placeholder: "1.0.15"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: "macOS 15.5 (Apple Silicon)"
+    validations:
+      required: true
+  - type: dropdown
+    id: source
+    attributes:
+      label: LLM source
+      options:
+        - Subscription (Claude Code)
+        - Subscription (Codex)
+        - API key (OpenAI / compatible)
+        - API key (Anthropic)
+        - Ollama (local)
+        - Mock / not applicable
+  - type: textarea
+    id: book
+    attributes:
+      label: About the book (if output is wrong)
+      description: >
+        Format (.epub/.txt), rough size, language pair. If you can share a
+        minimal sample file that reproduces the problem, that helps enormously.
+        Never paste API keys or license-restricted book content.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / error output
+      render: text
