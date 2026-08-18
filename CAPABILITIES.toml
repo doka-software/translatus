@@ -1,0 +1,183 @@
+# CAPABILITIES.toml — single source of truth for user-visible capabilities.
+# Governance: capability parity between the CLI and any GUI host embedding the engine.
+#
+# WHAT BELONGS HERE (inclusion criteria):
+#   A capability is listed when it is user-visible AND routed through the core
+#   engine — i.e. it touches `TranslateConfig` (crates/core/src/config.rs) or a
+#   CLI command/flag. Host-side features that never pass through core config
+#   (window chrome, onboarding, interface language…) belong to the host's own
+#   capability map and are deliberately NOT declared here.
+#
+# SCHEMA (enforced by apps/cli/src/parity_tests.rs — run `cargo test -p translatus`):
+#   id       unique kebab-case name.
+#   since    workspace version that first shipped the capability.
+#   surfaces subset of ["cli","gui"]. If a surface is deliberately missing,
+#            `reason` is REQUIRED (intentional asymmetry must be explicit;
+#            silent drift is a test failure).
+#   config   TranslateConfig field names this capability owns. The union across
+#            all capabilities must equal the full TranslateConfig key set —
+#            adding a config field without declaring a capability is a red test.
+#   cli      required when surfaces contains "cli": the subcommands and flags
+#            that expose it. Each command must exist; each flag must exist on
+#            at least one listed command (or globally). Declared-but-missing
+#            flags are a red test.
+#   tests    test-function anchors (must exist somewhere under crates/ or
+#            apps/); a capability ships with tests or it doesn't ship.
+
+[[capability]]
+id       = "translate-standard"
+since    = "1.0.0"
+surfaces = ["cli", "gui"]
+config   = ["target_lang", "level", "max_batch_sentences", "max_chunk_tokens"]
+cli      = { commands = ["translate"], flags = ["--to", "--level", "--output"] }
+tests    = [
+  "translate_plus_annotate_bilingual_end_to_end",
+  "accepts_valid",
+  "respects_unit_cap",
+]
+
+[[capability]]
+id       = "translate-expert"
+since    = "1.0.0"
+surfaces = ["cli", "gui"]
+config   = ["level"]
+cli      = { commands = ["translate"], flags = ["--level"] }
+tests    = [
+  "bake_glossary_makes_target_self_contained",
+  "consistency_flags_term_misuse",
+  "reflect_response_validation_uses_draft_placeholders",
+]
+
+[[capability]]
+id       = "annotate"
+since    = "1.0.0"
+surfaces = ["cli", "gui"]
+config   = ["annotations"]
+cli      = { commands = ["annotate", "translate"], flags = ["--annotate", "--profile", "--density", "--note-lang", "--note-style", "--note-presets", "--note-profile", "--note-anchors", "--note-voice", "--note-level"] }
+tests    = [
+  "annotate_only_epub_end_to_end",
+  "translate_plus_annotate_bilingual_end_to_end",
+  "chapter_cap_trims_greedy_model_by_priority",
+  "before_and_after_placements_end_to_end",
+  "note_style_injected_into_n1_and_n2",
+  "preset_guidance_injected_into_selection_and_notes",
+  "annotation_presets_enter_signature_only_canonically",
+  "anchors_injected_into_plan_selection_and_notes",
+  "anchors_and_voice_enter_annotation_signature_only",
+  "voice_selects_default_style_and_custom_style_wins",
+  "plan_block_carries_thread_map",
+  "reader_addressing_notes_are_rejected_at_both_chokepoints",
+  "reader_profile_contract_parses_and_rejects_unknown_keys",
+  "note_profile_over_mcp_must_be_inline_json",
+  "explain_level_injected_and_profile_optional",
+  "explain_level_enters_annotation_signature_only",
+  "service_menu_covers_world_methods_research",
+]
+
+[[capability]]
+id       = "bilingual-output"
+since    = "1.0.0"
+surfaces = ["cli", "gui"]
+config   = ["output_mode"]
+cli      = { commands = ["translate"], flags = ["--mode"] }
+tests    = [
+  "apply_bilingual_inserts_sibling",
+  "translate_plus_annotate_bilingual_end_to_end",
+]
+
+[[capability]]
+id       = "provider-select"
+since    = "1.0.0"
+surfaces = ["cli", "gui"]
+config   = ["provider", "model"]
+cli      = { commands = ["translate", "annotate"], flags = ["--provider", "--model", "--base-url"] }
+tests    = [
+  "cache_signature_is_stable_and_sensitive",
+  "annotation_signature_is_sensitive_and_independent",
+]
+
+[[capability]]
+id       = "custom-prompt"
+since    = "1.0.0"
+surfaces = ["cli", "gui"]
+config   = ["custom_prompt"]
+cli      = { commands = ["translate"], flags = ["--prompt"] }
+tests    = ["cache_signature_is_stable_and_sensitive"]
+
+[[capability]]
+id       = "cache-resume"
+since    = "1.0.0"
+surfaces = ["cli", "gui"]
+config   = []
+cli      = { commands = ["translate", "annotate"], flags = ["--job"] }
+tests    = [
+  "cache_persists_and_resume_restores",
+  "batch_checkpoint_resumes_mid_chapter",
+]
+
+[[capability]]
+id       = "cache-only-rerender"
+since    = "1.0.0"
+surfaces = ["cli", "gui"]
+config   = []
+cli      = { commands = ["translate", "annotate"], flags = ["--cache-only"] }
+tests    = ["annotate_only_epub_end_to_end"]
+
+[[capability]]
+id       = "estimate"
+since    = "1.0.0"
+surfaces = ["cli", "gui"]
+config   = []
+cli      = { commands = ["estimate"], flags = ["--to", "--level", "--model", "--annotate", "--density"] }
+tests    = ["gpt5_mini_priced_and_not_shadowed_by_bare_5_4"]
+
+[[capability]]
+id       = "concurrency"
+since    = "1.0.0"
+surfaces = ["cli"]
+reason   = "Throughput tuning for direct-API agent runs. The GUI deliberately keeps the safe sequential default: subscription-style backends are heavy and rate-limit-prone under parallel batches."
+config   = ["concurrency"]
+cli      = { commands = ["translate"], flags = ["--concurrency"] }
+tests    = ["concurrency_matches_sequential"]
+
+[[capability]]
+id       = "json-output"
+since    = "1.0.0"
+surfaces = ["cli"]
+reason   = "Machine-readable stdout events are the agent interface; the GUI renders the same progress events visually instead."
+config   = []
+cli      = { commands = [], flags = ["--json"] }
+tests    = ["json_flag_is_global"]
+
+[[capability]]
+id       = "live-read-along"
+since    = "1.0.0"
+surfaces = ["gui"]
+reason   = "The streaming read-along preview is a windowed reading surface; the CLI reports the same batch/chapter progress as JSON lines (see json-output) rather than rendering pages."
+config   = []
+tests    = ["batch_checkpoint_resumes_mid_chapter"]
+
+[[capability]]
+id       = "mcp-server"
+since    = "1.0.0"
+surfaces = ["cli"]
+reason   = "The MCP server IS the agent surface of the CLI (tools = the CLI's own commands over stdio). The GUI is the human surface; agents connect through `translatus mcp` or --json instead of driving a GUI."
+config   = []
+cli      = { commands = ["mcp", "mcp install", "mcp uninstall"], flags = [] }
+tests    = [
+  "mcp_handshake_tools_list_and_mock_estimate",
+  "mcp_translate_streams_progress_and_writes_output",
+  "mcp_caps_paid_book_jobs_while_estimates_remain_available",
+  "mcp_tool_schemas_are_wellformed",
+  "mcp_schemas_never_accept_secrets_or_arbitrary_write_paths",
+  "build_argv_maps_params_to_cli_flags",
+  # The return surface is a trust boundary: the caller is an agent with tools,
+  # so book text crossing back is injection, not just noise. See SECURITY-REVIEW §3.
+  "mcp_results_never_carry_book_content",
+  "mcp_errors_never_return_subprocess_output",
+  "tool_results_allowlist_metadata_and_drop_model_text",
+  "progress_omits_book_controlled_fields",
+  "ambient_credentials_can_be_disabled_without_touching_keychain_or_env",
+  "scoped_endpoint_token_requires_exact_operator_configured_url",
+  "target_language_cannot_escape_the_input_directory",
+]
