@@ -1,0 +1,21 @@
+# cargo-about config — generates THIRD-PARTY-LICENSES.md.
+# Regenerate: cargo about generate about.hbs -o THIRD-PARTY-LICENSES.md
+accepted = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "BSL-1.0",
+    "CC0-1.0",
+    "Unlicense",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "MPL-2.0",
+    "OpenSSL",
+    "CDLA-Permissive-2.0",
+]
+# Only what actually ships: the workspace's normal dependency graph.
+workarounds = ["ring"]
