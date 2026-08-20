@@ -1,0 +1,29 @@
+# Third-party licenses
+
+This file lists the third-party Rust crates distributed as part of the
+Translatus engine and CLI, grouped by license, with the full license texts.
+Generated with [cargo-about](https://github.com/EmbarkStudios/cargo-about):
+`cargo about generate about.hbs -o THIRD-PARTY-LICENSES.md`.
+
+## Overview
+
+{{#each overview}}
+- {{{name}}} ({{id}}): {{count}} crate(s)
+{{/each}}
+
+## Licenses
+
+{{#each licenses}}
+### {{{name}}}
+
+Used by:
+
+{{#each used_by}}
+- [{{crate.name}} {{crate.version}}]({{#if crate.repository}}{{crate.repository}}{{else}}https://crates.io/crates/{{crate.name}}{{/if}})
+{{/each}}
+
+```
+{{{text}}}
+```
+
+{{/each}}
