@@ -1,0 +1,139 @@
+name: release
+
+# Fires on a version tag pushed to the public carrier repo. Builds the CLI for
+# every platform we claim to support, then publishes one GitHub Release
+# carrying the binaries, the dependency licence manifest, and the notes for
+# that version.
+#
+# Third-party actions are pinned by commit SHA, not by tag: a tag is mutable
+# and a compromised upstream could silently change what runs here. Release
+# creation goes through the `gh` CLI already present on the runners rather
+# than a publishing action, so there is one fewer third party in the chain.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-14
+          - target: x86_64-apple-darwin
+            os: macos-14
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable (2026-07 pin)
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2 (commit, not the tag object)
+
+      # apt on a hosted runner can stall indefinitely on a mirror, and with no
+      # timeout that stall burns the 6h job ceiling: on 2026-08-19 it cancelled
+      # the CI run and both release runs for v1.1.5 and v1.1.6, so two tagged
+      # releases never published. Bound each attempt and retry rather than wait
+      # for the ceiling.
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          for attempt in 1 2 3; do
+            if timeout 180 sudo -E apt-get update -o Acquire::Retries=3 \
+               && timeout 180 sudo -E apt-get install -y --no-install-recommends \
+                    libdbus-1-dev libssl-dev pkg-config; then
+              exit 0
+            fi
+            echo "apt attempt $attempt failed or timed out; retrying" >&2
+            sleep $((attempt * 15))
+          done
+          echo "apt did not complete after 3 attempts" >&2
+          exit 1
+
+      - name: Build
+        run: cargo build --release --locked -p translatus --target ${{ matrix.target }}
+
+      # A release binary that cannot start is worse than no release. This is a
+      # smoke test, not a test run — the suite already gated the commit.
+      - name: Smoke-test the binary
+        if: matrix.target != 'x86_64-apple-darwin' # cross-built on arm64, cannot run here
+        run: |
+          ./target/${{ matrix.target }}/release/translatus --version
+          ./target/${{ matrix.target }}/release/translatus --help > /dev/null
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          name="translatus-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          mkdir -p "dist/$name"
+          cp "target/${{ matrix.target }}/release/translatus" "dist/$name/"
+          cp README.md LICENSE THIRD-PARTY-LICENSES.md "dist/$name/"
+          # Subscription sidecar users need this directory; binary-only downloads should
+          # not have to clone the repo to get it.
+          cp -R apps/subscription-kit "dist/$name/subscription-kit"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          # Checksum from inside dist/ so the recorded filename is bare —
+          # `shasum -c` must work in the directory the user downloaded into.
+          (cd dist && shasum -a 256 "$name.tar.gz" | tee "$name.tar.gz.sha256")
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*.tar.gz*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      # Notes come from the CHANGELOG section matching the tag, so the release
+      # page and the repo can never drift. A tag with no section is a mistake
+      # worth failing on rather than papering over with an empty release.
+      - name: Extract release notes
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { found=1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > NOTES.md
+          if [ ! -s NOTES.md ]; then
+            echo "::error::CHANGELOG.md has no section for [$version]" >&2
+            exit 1
+          fi
+          cat NOTES.md
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file NOTES.md \
+            dist/*.tar.gz dist/*.sha256
