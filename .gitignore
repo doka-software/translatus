@@ -1,0 +1,25 @@
+/target
+**/*.etjob
+settings.json
+*.zh.epub
+*.ja.epub
+*.bi.epub
+.DS_Store
+# node sidecars
+node_modules/
+# local credentials and machine-specific auth state
+.env
+.env.*
+!.env.example
+.npmrc
+.netrc
+.codex/
+.claude/
+**/auth.json
+**/.credentials.json
+.cargo/credentials
+.cargo/credentials.toml
+# never commit private key material
+/keys/
+*.pem
+*.key
