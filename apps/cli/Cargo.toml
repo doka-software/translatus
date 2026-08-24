@@ -1,0 +1,29 @@
+[package]
+name = "translatus"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Translatus CLI — translate ebooks with your own LLM (agent-friendly JSON I/O)"
+
+[[bin]]
+name = "translatus"
+path = "src/main.rs"
+
+[dependencies]
+et-core = { path = "../../crates/core" }
+anyhow.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing-subscriber.workspace = true
+# Interactive TUI (`translatus` with no subcommand). Terminal state + key
+# events only; all rendering is raw ANSI so the visual language stays ours.
+crossterm.workspace = true
+unicode-width.workspace = true
+
+[dev-dependencies]
+# Parity tests parse CAPABILITIES.toml (src/parity_tests.rs); dev-only.
+toml.workspace = true
